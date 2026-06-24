@@ -23,7 +23,9 @@ export type IconName =
   | "ai"
   | "broadcast"
   | "view"
-  | "swatch";
+  | "swatch"
+  | "folder"
+  | "save";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -117,6 +119,15 @@ const PATHS: Record<IconName, ReactElement> = {
     </>
   ),
   swatch: <circle cx="12" cy="12" r="8" fill="currentColor" stroke="none" />,
+  folder: (
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h6a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+  ),
+  save: (
+    <>
+      <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+      <path d="M8 4v5h7V4M8 21v-7h8v7" />
+    </>
+  ),
 };
 
 export default function Icon({ name, size = "1em", ...rest }: IconProps) {

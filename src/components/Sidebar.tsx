@@ -7,7 +7,11 @@ import {
   buildRows,
   colorValue,
 } from "../lib/tabGroups";
+import type { Launcher } from "../lib/launchers";
+import type { Project } from "../lib/projects";
 import Icon from "./Icon";
+import ProjectsSection from "./ProjectsSection";
+import LauncherMenu from "./LauncherMenu";
 
 export interface SidebarTab {
   id: string;
@@ -39,6 +43,17 @@ interface SidebarProps {
   /** DnD: relocate a whole group block before `beforeId` (null = end). */
   onMoveGroup: (groupId: string, beforeId: string | null) => void;
   onOpenGrid: (groupId: string) => void;
+  /** curated + saved "new session" launchers */
+  launchers: Launcher[];
+  onNewWithLauncher: (launcher: Launcher) => void;
+  onAddLauncher: () => void;
+  onDeleteLauncher: (id: string) => void;
+  /** saved workspace snapshots */
+  projects: Project[];
+  onSaveProject: () => void;
+  onRestoreProject: (id: string) => void;
+  onRenameProject: (id: string, name: string) => void;
+  onDeleteProject: (id: string) => void;
 }
 
 /** A right-click menu anchored to the cursor, for a tab or a group header. */
@@ -114,8 +129,18 @@ export default function Sidebar({
   onMoveTab,
   onMoveGroup,
   onOpenGrid,
+  launchers,
+  onNewWithLauncher,
+  onAddLauncher,
+  onDeleteLauncher,
+  projects,
+  onSaveProject,
+  onRestoreProject,
+  onRenameProject,
+  onDeleteProject,
 }: SidebarProps) {
   const [menu, setMenu] = useState<Menu>(null);
+  const [launcherOpen, setLauncherOpen] = useState(false);
   const [editing, setEditing] = useState<
     { kind: "tab" | "group"; id: string } | null
   >(null);
@@ -244,11 +269,45 @@ export default function Sidebar({
 
   return (
     <aside className="sidebar" aria-label="Sessions">
+      <ProjectsSection
+        projects={projects}
+        onSave={onSaveProject}
+        onRestore={onRestoreProject}
+        onRename={onRenameProject}
+        onDelete={onDeleteProject}
+      />
+
       <div className="sidebar__head">
         <span className="sidebar__title">Sessions</span>
-        <button className="sidebar__new" onClick={onNew} title="New session (⌘T)">
-          <Icon name="plus" /> New
-        </button>
+        <div className="sidebar__new-split">
+          <button
+            className="sidebar__new"
+            onClick={onNew}
+            title="New session (⌘T)"
+          >
+            <Icon name="plus" /> New
+          </button>
+          <button
+            className={
+              "sidebar__new-caret" + (launcherOpen ? " sidebar__new-caret--on" : "")
+            }
+            aria-haspopup="menu"
+            aria-expanded={launcherOpen}
+            title="Choose a shell or launcher"
+            onClick={() => setLauncherOpen((o) => !o)}
+          >
+            <Icon name="chevron" />
+          </button>
+          {launcherOpen && (
+            <LauncherMenu
+              launchers={launchers}
+              onPick={onNewWithLauncher}
+              onAdd={onAddLauncher}
+              onDelete={onDeleteLauncher}
+              onClose={() => setLauncherOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       <div

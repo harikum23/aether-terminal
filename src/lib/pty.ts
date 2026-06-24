@@ -24,6 +24,11 @@ export function kill(id: string): Promise<void> {
   return invoke("pty_kill", { id });
 }
 
+/** Best-effort current working directory of a session's shell (null if unknown). */
+export function cwd(id: string): Promise<string | null> {
+  return invoke<string | null>("pty_cwd", { id });
+}
+
 export function onOutput(
   id: string,
   cb: (bytes: Uint8Array) => void,

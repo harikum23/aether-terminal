@@ -12,6 +12,9 @@ struct PtySession {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// OS pid of the shell, used to look up the session's working directory
+    /// when a project snapshot is saved. `None` if the platform didn't report one.
+    pid: Option<u32>,
 }
 
 /// Holds every open terminal keyed by a frontend-supplied id.
@@ -77,6 +80,7 @@ pub fn pty_spawn(
         .slave
         .spawn_command(cmd)
         .map_err(|e| e.to_string())?;
+    let pid = child.process_id();
 
     // The slave handle must be dropped so the kernel reports EOF when the
     // child exits, otherwise the reader thread blocks forever.
@@ -114,10 +118,57 @@ pub fn pty_spawn(
             master: pair.master,
             writer,
             child,
+            pid,
         },
     );
 
     Ok(())
+}
+
+/// Best-effort current working directory of a session's shell. Used when
+/// saving a project so each pane can be reopened where it was left. Returns
+/// `None` rather than erroring when the directory can't be determined.
+#[tauri::command]
+pub fn pty_cwd(state: State<'_, PtyManager>, id: String) -> Result<Option<String>, String> {
+    let pid = {
+        let sessions = state.sessions.lock();
+        match sessions.get(&id) {
+            Some(s) => s.pid,
+            None => return Ok(None),
+        }
+    };
+    Ok(pid.and_then(cwd_of_pid))
+}
+
+/// Resolve a pid's working directory. Implementation is per-platform; any
+/// failure (missing tool, permission, dead process) collapses to `None`.
+#[cfg(target_os = "linux")]
+fn cwd_of_pid(pid: u32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{pid}/cwd"))
+        .ok()
+        .and_then(|p| p.to_str().map(str::to_owned))
+}
+
+#[cfg(target_os = "macos")]
+fn cwd_of_pid(pid: u32) -> Option<String> {
+    // macOS has no /proc; `lsof` reports the cwd file descriptor. `-Fn` emits
+    // machine-readable records where the cwd path is the field prefixed with 'n'.
+    let out = std::process::Command::new("/usr/sbin/lsof")
+        .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|line| line.strip_prefix('n').map(str::to_owned))
+        .filter(|p| !p.is_empty())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn cwd_of_pid(_pid: u32) -> Option<String> {
+    None
 }
 
 /// Forward keystrokes / pasted text to the shell.

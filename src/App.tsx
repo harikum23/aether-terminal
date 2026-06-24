@@ -8,6 +8,7 @@ import CommandPalette, { type Command } from "./components/CommandPalette";
 import SettingsPanel from "./components/SettingsPanel";
 import AiPanel from "./components/AiPanel";
 import AiPromptModal from "./components/AiPromptModal";
+import PromptModal from "./components/PromptModal";
 import MissionControl from "./components/agents/MissionControl";
 import ConnectionBanner from "./components/ConnectionBanner";
 import { THEMES, themeById, chromeSurface, chromeLine } from "./lib/theme";
@@ -51,6 +52,20 @@ import {
   setSizes,
   neighbor,
 } from "./lib/panes";
+import {
+  type Launcher,
+  BUILTIN_LAUNCHERS,
+  makeLauncher,
+  loadUserLaunchers,
+  saveUserLaunchers,
+} from "./lib/launchers";
+import {
+  type Project,
+  buildProject,
+  restoreProject as restoreProjectSnapshot,
+  loadProjects,
+  saveProjects,
+} from "./lib/projects";
 
 /** A tab owns a tree of split panes plus which pane is focused. */
 interface Tab {
@@ -130,6 +145,18 @@ export default function App() {
   // pane the current AI task is acting on (insert target)
   const aiPaneRef = useRef<string | null>(null);
 
+  // launchers (curated shells/REPLs + user-saved) and saved projects
+  const [userLaunchers, setUserLaunchers] = useState<Launcher[]>(() =>
+    loadUserLaunchers(),
+  );
+  const [projects, setProjects] = useState<Project[]>(() => loadProjects());
+  const [saveProjectOpen, setSaveProjectOpen] = useState(false);
+  const [launcherModalOpen, setLauncherModalOpen] = useState(false);
+  const launchers = useMemo(
+    () => [...BUILTIN_LAUNCHERS, ...userLaunchers],
+    [userLaunchers],
+  );
+
   const theme = themeById(themeId);
   const accent = accentById(accentId);
 
@@ -180,6 +207,10 @@ export default function App() {
     savePrefs({ themeId, accentId, type, ollama });
   }, [themeId, accentId, type, ollama]);
 
+  // persist user launchers + saved projects
+  useEffect(() => saveUserLaunchers(userLaunchers), [userLaunchers]);
+  useEffect(() => saveProjects(projects), [projects]);
+
   // platform detect → opaque fallback. macOS gets native vibrancy (translucent
   // chrome over the desktop); every other platform gets a solid opaque shell so
   // the glass still reads with nothing behind the window.
@@ -201,8 +232,8 @@ export default function App() {
   const health = useIngestHealth();
 
   // refs so the global key handler always sees fresh state
-  const stateRef = useRef({ tabs, activeId });
-  stateRef.current = { tabs, activeId };
+  const stateRef = useRef({ tabs, activeId, groups });
+  stateRef.current = { tabs, activeId, groups };
 
   const activeTab = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const activeGroup = activeTab.groupId
@@ -215,11 +246,34 @@ export default function App() {
     setTabs((ts) => ts.map((t) => (t.id === tabId ? fn(t) : t)));
   }, []);
 
-  const newTab = useCallback((groupId?: string | null) => {
-    const tab = makeTab();
-    tab.groupId = groupId ?? null;
-    setTabs((ts) => [...ts, tab]);
-    setActiveId(tab.id);
+  const newTab = useCallback(
+    (opts?: {
+      groupId?: string | null;
+      initialCommand?: string;
+      title?: string;
+    }) => {
+      const tab = makeTab({
+        title: opts?.title,
+        initialCommand: opts?.initialCommand,
+      });
+      tab.groupId = opts?.groupId ?? null;
+      setTabs((ts) => [...ts, tab]);
+      setActiveId(tab.id);
+    },
+    [],
+  );
+
+  /** Open a new session from a launcher profile (runs its command, if any). */
+  const newWithLauncher = useCallback(
+    (l: Launcher) => {
+      if (l.command) newTab({ initialCommand: l.command, title: l.name });
+      else newTab();
+    },
+    [newTab],
+  );
+
+  const deleteLauncher = useCallback((id: string) => {
+    setUserLaunchers((ls) => ls.filter((l) => l.id !== id));
   }, []);
 
   // drop any group whose last tab was closed or moved out
@@ -299,6 +353,57 @@ export default function App() {
     setTabs((ts) =>
       ts.map((t) => (t.groupId === groupId ? { ...t, groupId: null } : t)),
     );
+  }, []);
+
+  /** Snapshot the workspace into a named project (captures each pane's cwd). */
+  const persistProject = useCallback(async (name: string) => {
+    const { tabs: ts, groups: gs } = stateRef.current;
+    const ids = ts.flatMap((t) => leafIds(t.root));
+    const cwdById = new Map<string, string>();
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const dir = await pty.cwd(id);
+          if (dir) cwdById.set(id, dir);
+        } catch {
+          /* cwd unavailable for this pane — restore just starts in $HOME */
+        }
+      }),
+    );
+    const project = buildProject(name, ts, gs, cwdById);
+    setProjects((ps) => [project, ...ps]);
+  }, []);
+
+  /** Reopen a saved project, appending its sessions to the current workspace. */
+  const openProject = useCallback(
+    (id: string) => {
+      const project = projects.find((p) => p.id === id);
+      if (!project) return;
+      try {
+        const { tabs: newTabs, groups: newGroups } =
+          restoreProjectSnapshot(project);
+        const built = newTabs.map((t) => ({
+          ...t,
+          activePaneId: firstLeafId(t.root),
+        }));
+        setGroups((gs) => [...gs, ...newGroups]);
+        setTabs((ts) => [...ts, ...built]);
+        if (built[0]) setActiveId(built[0].id);
+        setView("terminal");
+        setGridGroupId(null);
+      } catch (err) {
+        console.error("failed to restore project", err);
+      }
+    },
+    [projects],
+  );
+
+  const renameProject = useCallback((id: string, name: string) => {
+    setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, name } : p)));
+  }, []);
+
+  const deleteProject = useCallback((id: string) => {
+    setProjects((ps) => ps.filter((p) => p.id !== id));
   }, []);
 
   const launchClaude = useCallback(async () => {
@@ -585,6 +690,35 @@ export default function App() {
         run: () => openGroupGrid(g.id),
       }),
     );
+    launchers.forEach((l) =>
+      cmds.push({
+        id: "launch-" + l.id,
+        group: "Launch",
+        title: l.command ? `New session · ${l.name}` : "New session · Default shell",
+        hint: l.command || undefined,
+        run: () => newWithLauncher(l),
+      }),
+    );
+    cmds.push({
+      id: "launch-new",
+      group: "Launch",
+      title: "New launcher…",
+      run: () => setLauncherModalOpen(true),
+    });
+    cmds.push({
+      id: "project-save",
+      group: "Project",
+      title: "Save workspace as project…",
+      run: () => setSaveProjectOpen(true),
+    });
+    projects.forEach((p) =>
+      cmds.push({
+        id: "project-open-" + p.id,
+        group: "Project",
+        title: `Open project · ${p.name}`,
+        run: () => openProject(p.id),
+      }),
+    );
     if (ollama.enabled) {
       cmds.push(
         {
@@ -631,7 +765,7 @@ export default function App() {
       }),
     );
     return cmds;
-  }, [newTab, closeTab, closeActivePane, cycleTab, bumpFont, resetFont, splitActive, broadcast, launchClaude, ollama.enabled, startCommandTask, runOutputTask, groups, openGroupGrid, switchView, switchTheme, switchAccent]);
+  }, [newTab, closeTab, closeActivePane, cycleTab, bumpFont, resetFont, splitActive, broadcast, launchClaude, ollama.enabled, startCommandTask, runOutputTask, groups, openGroupGrid, switchView, switchTheme, switchAccent, launchers, newWithLauncher, projects, openProject]);
 
   return (
     <div
@@ -665,7 +799,7 @@ export default function App() {
             onSelect={setActiveId}
             onClose={closeTab}
             onNew={() => newTab()}
-            onNewInGroup={(gid) => newTab(gid)}
+            onNewInGroup={(gid) => newTab({ groupId: gid })}
             onRenameTab={renameTab}
             onRenameGroup={renameGroup}
             onCycleGroupColor={cycleGroupColor}
@@ -680,6 +814,15 @@ export default function App() {
             onMoveTab={moveTabTo}
             onMoveGroup={moveGroupTo}
             onOpenGrid={openGroupGrid}
+            launchers={launchers}
+            onNewWithLauncher={newWithLauncher}
+            onAddLauncher={() => setLauncherModalOpen(true)}
+            onDeleteLauncher={deleteLauncher}
+            projects={projects}
+            onSaveProject={() => setSaveProjectOpen(true)}
+            onRestoreProject={openProject}
+            onRenameProject={renameProject}
+            onDeleteProject={deleteProject}
           />
         )}
 
@@ -798,6 +941,41 @@ export default function App() {
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
         onSubmit={submitCommandRequest}
+      />
+
+      <PromptModal
+        open={saveProjectOpen}
+        title="Save workspace as project"
+        submitLabel="Save"
+        fields={[
+          {
+            key: "name",
+            label: "Project name",
+            placeholder: "e.g. aether-terminal",
+            initial: activeGroup?.name ?? `Workspace ${projects.length + 1}`,
+          },
+        ]}
+        onClose={() => setSaveProjectOpen(false)}
+        onSubmit={(v) => {
+          setSaveProjectOpen(false);
+          void persistProject(v.name);
+        }}
+      />
+
+      <PromptModal
+        open={launcherModalOpen}
+        title="New launcher"
+        submitLabel="Add"
+        fields={[
+          { key: "name", label: "Name", placeholder: "e.g. PowerShell 7" },
+          { key: "command", label: "Command", placeholder: "e.g. pwsh" },
+        ]}
+        onClose={() => setLauncherModalOpen(false)}
+        onSubmit={(v) => {
+          setLauncherModalOpen(false);
+          if (v.command || v.name)
+            setUserLaunchers((ls) => [...ls, makeLauncher(v.name, v.command)]);
+        }}
       />
 
       {aiTask && (

@@ -17,6 +17,8 @@ export interface LeafNode {
   title: string;
   /** typed into the shell once the PTY is ready (e.g. launch a tool) */
   initialCommand?: string;
+  /** last-known working directory, captured when a project snapshot is saved */
+  cwd?: string;
 }
 
 export interface SplitNode {
@@ -43,6 +45,78 @@ export function makeLeaf(opts?: {
     id: uid("pane"),
     title: opts?.title ?? "zsh",
     initialCommand: opts?.initialCommand,
+  };
+}
+
+/* ---- serialization (saved projects) ------------------------- */
+
+export interface SavedLeaf {
+  type: "leaf";
+  title: string;
+  initialCommand?: string;
+  cwd?: string;
+}
+export interface SavedSplit {
+  type: "split";
+  dir: SplitDir;
+  sizes: number[];
+  children: SavedPaneNode[];
+}
+export type SavedPaneNode = SavedLeaf | SavedSplit;
+
+/** POSIX single-quote a path so it survives `cd` with spaces/specials. */
+function shellQuote(p: string): string {
+  return `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Serialize a live tree into a persistable form (no ids — they're regenerated
+ * on restore), attaching each leaf's working directory from `cwdById`.
+ */
+export function serializePane(
+  node: PaneNode,
+  cwdById: Map<string, string>,
+): SavedPaneNode {
+  if (node.type === "leaf") {
+    return {
+      type: "leaf",
+      title: node.title,
+      initialCommand: node.initialCommand,
+      cwd: cwdById.get(node.id) ?? node.cwd,
+    };
+  }
+  return {
+    type: "split",
+    dir: node.dir,
+    sizes: node.sizes,
+    children: node.children.map((c) => serializePane(c, cwdById)),
+  };
+}
+
+/** The command a restored leaf runs: cd back to its dir, then re-launch. */
+function restoreCommand(leaf: SavedLeaf): string | undefined {
+  const parts: string[] = [];
+  if (leaf.cwd) parts.push(`cd ${shellQuote(leaf.cwd)}`);
+  if (leaf.initialCommand) parts.push(leaf.initialCommand);
+  return parts.length ? parts.join(" && ") : undefined;
+}
+
+/**
+ * Rebuild a live tree from a saved one, assigning fresh ids (pane ids must be
+ * globally unique) and composing each leaf's restore command.
+ */
+export function restorePane(saved: SavedPaneNode): PaneNode {
+  if (saved.type === "leaf") {
+    return makeLeaf({ title: saved.title, initialCommand: restoreCommand(saved) });
+  }
+  return {
+    type: "split",
+    id: uid("split"),
+    dir: saved.dir,
+    sizes: saved.sizes.length === saved.children.length
+      ? saved.sizes
+      : saved.children.map(() => 1),
+    children: saved.children.map(restorePane),
   };
 }
 

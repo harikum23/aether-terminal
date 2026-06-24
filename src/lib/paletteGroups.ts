@@ -22,6 +22,8 @@ const MAP: Record<string, GroupStyle> = {
   Accent: { color: "var(--pg-accent)", icon: "palette" },
   Agents: { color: "var(--pg-agents)", icon: "agents" },
   AI: { color: "var(--pg-ai)", icon: "ai" },
+  Launch: { color: "var(--pg-tab)", icon: "terminal" },
+  Project: { color: "var(--pg-view)", icon: "folder" },
 };
 
 export function groupStyle(group: string): GroupStyle {
