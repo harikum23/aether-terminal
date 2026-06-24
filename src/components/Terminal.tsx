@@ -207,7 +207,18 @@ export default function Terminal({
   // --- live theme changes ---
   useEffect(() => {
     const term = termRef.current;
-    if (term) term.options.theme = theme.xterm;
+    if (!term) return;
+    term.options.theme = theme.xterm;
+    // The WebGL renderer caches glyphs (with their colors) in a texture atlas.
+    // Swapping the theme alone leaves already-painted text drawn in the OLD
+    // colors — which can render it invisible against the new background. Clear
+    // the atlas and force a full repaint so every cell adopts the new palette.
+    try {
+      term.clearTextureAtlas();
+      term.refresh(0, term.rows - 1);
+    } catch {
+      /* DOM renderer repaints on its own */
+    }
   }, [theme]);
 
   // --- live typography changes ---

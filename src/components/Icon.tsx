@@ -25,7 +25,9 @@ export type IconName =
   | "view"
   | "swatch"
   | "folder"
-  | "save";
+  | "save"
+  | "clock"
+  | "layers";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -126,6 +128,18 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
       <path d="M8 4v5h7V4M8 21v-7h8v7" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="M12 3l9 5-9 5-9-5 9-5z" />
+      <path d="M3 13l9 5 9-5" />
     </>
   ),
 };

@@ -13,7 +13,7 @@ import MissionControl from "./components/agents/MissionControl";
 import ConnectionBanner from "./components/ConnectionBanner";
 import { THEMES, themeById, chromeSurface, chromeLine } from "./lib/theme";
 import { ACCENTS, accentById, accentGlow } from "./lib/accents";
-import { type TypeSettings, TYPE_LIMITS } from "./lib/typography";
+import { type TypeSettings, TYPE_LIMITS, fontStackById } from "./lib/typography";
 import { loadPrefs, savePrefs, type OllamaPrefs } from "./lib/prefs";
 import * as termRegistry from "./lib/termRegistry";
 import { useAiTask } from "./lib/useAiTask";
@@ -34,6 +34,7 @@ import {
   type TabGroup,
   makeGroup,
   nextColor,
+  pickGroupColor,
   pruneGroups,
   moveTab,
   moveGroupBlock,
@@ -75,6 +76,8 @@ interface Tab {
   activePaneId: string;
   /** id of the sidebar group this tab belongs to, or null/undefined if loose */
   groupId?: string | null;
+  /** id of the saved project this tab was restored from (dedupes re-opening) */
+  projectId?: string;
 }
 
 let tabSeq = 0;
@@ -206,6 +209,30 @@ export default function App() {
   useEffect(() => {
     savePrefs({ themeId, accentId, type, ollama });
   }, [themeId, accentId, type, ollama]);
+
+  // --- force the window chrome to repaint on theme/accent change ---
+  // WKWebView (Tauri's webview) can leave text *inside a backdrop-filter layer*
+  // unpainted when the inherited CSS color variables change — so static-color
+  // labels (the sidebar "PROJECTS"/"SESSIONS" titles, counts, hints) vanish
+  // until the next hover/scroll. A sub-perceptual opacity nudge for one frame
+  // forces the whole shell to recomposite, repainting every chrome surface.
+  const appRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = appRef.current;
+    if (!el) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      el.style.opacity = "0.999";
+      raf2 = requestAnimationFrame(() => {
+        el.style.opacity = "";
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      el.style.opacity = "";
+    };
+  }, [themeId, accentId]);
 
   // persist user launchers + saved projects
   useEffect(() => saveUserLaunchers(userLaunchers), [userLaunchers]);
@@ -341,7 +368,7 @@ export default function App() {
 
   /** Create a fresh group and drop `tabId` into it. */
   const newGroupFromTab = useCallback((tabId: string) => {
-    const group = makeGroup();
+    const group = makeGroup(undefined, pickGroupColor(stateRef.current.groups));
     setGroups((gs) => [...gs, group]);
     setTabs((ts) =>
       ts.map((t) => (t.id === tabId ? { ...t, groupId: group.id } : t)),
@@ -374,9 +401,19 @@ export default function App() {
     setProjects((ps) => [project, ...ps]);
   }, []);
 
-  /** Reopen a saved project, appending its sessions to the current workspace. */
+  /** Open a saved project. If its sessions are already restored and still open,
+   *  just focus them — only restore (once) when they aren't present, so repeated
+   *  clicks never duplicate the group + sessions. */
   const openProject = useCallback(
     (id: string) => {
+      // already open? focus its first surviving session instead of duplicating.
+      const existing = stateRef.current.tabs.find((t) => t.projectId === id);
+      if (existing) {
+        setActiveId(existing.id);
+        setView("terminal");
+        setGridGroupId(null);
+        return;
+      }
       const project = projects.find((p) => p.id === id);
       if (!project) return;
       try {
@@ -385,6 +422,7 @@ export default function App() {
         const built = newTabs.map((t) => ({
           ...t,
           activePaneId: firstLeafId(t.root),
+          projectId: id,
         }));
         setGroups((gs) => [...gs, ...newGroups]);
         setTabs((ts) => [...ts, ...built]);
@@ -652,6 +690,10 @@ export default function App() {
     "--text-dim": theme.ui.textDim,
     "--chrome": chromeSurface(theme),
     "--chrome-line": chromeLine(theme),
+    // Let the window chrome (sidebar, tabs, status bar) track the user's chosen
+    // mono font + weight so the whole app reads as one typographic system.
+    "--font-mono": fontStackById(type.fontFamily),
+    "--ui-weight": String(type.fontWeight),
   } as React.CSSProperties;
 
   const commands: Command[] = useMemo(() => {
@@ -769,6 +811,7 @@ export default function App() {
 
   return (
     <div
+      ref={appRef}
       className="app"
       data-appearance={theme.appearance}
       style={rootStyle}

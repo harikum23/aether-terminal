@@ -48,6 +48,18 @@ export function nextColor(colorId: string): string {
   return GROUP_COLORS[(i + 1) % GROUP_COLORS.length].id;
 }
 
+/**
+ * Pick a distinct default color for a NEW group so groups don't all come out
+ * blue. Prefers a vivid color (skipping grey) not already in use; once every
+ * color is taken it rotates deterministically by the group count.
+ */
+export function pickGroupColor(existing: TabGroup[]): string {
+  const used = new Set(existing.map((g) => g.color));
+  const vivid = GROUP_COLORS.slice(1); // skip "grey"
+  const free = vivid.find((c) => !used.has(c.id));
+  return (free ?? vivid[existing.length % vivid.length]).id;
+}
+
 let groupSeq = 0;
 export function makeGroup(name?: string, color?: string): TabGroup {
   groupSeq += 1;

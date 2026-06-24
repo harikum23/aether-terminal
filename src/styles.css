@@ -55,7 +55,12 @@ body {
   background: transparent;
   color: var(--text);
   font-family: var(--font-ui);
+  /* crisp, native macOS text: grayscale smoothing + ligature-aware shaping,
+     and never let the browser fake a weight we didn't load */
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
   overflow: hidden;
   user-select: none;
 }
@@ -84,6 +89,9 @@ html.no-vibrancy body {
     ),
     linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 88%, #000) 100%);
   isolation: isolate;
+  /* theme-aware interaction surfaces — one source of truth for chrome hovers */
+  --sb-hover: rgba(255, 255, 255, 0.05);
+  --sb-press: rgba(255, 255, 255, 0.14);
 }
 
 /* On platforms without vibrancy, the glass has no desktop to sample, so the
@@ -465,7 +473,7 @@ html.no-vibrancy .app {
   position: relative;
   z-index: 3;
   flex: 0 0 auto;
-  width: 214px;
+  width: 252px;
   display: flex;
   flex-direction: column;
   margin: 10px 0 10px 10px;
@@ -490,6 +498,7 @@ html.no-vibrancy .app {
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--text-dim);
+  transition: color 0.15s;
 }
 .sidebar__new {
   -webkit-app-region: no-drag;
@@ -682,6 +691,7 @@ html.no-vibrancy .app {
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--text-dim);
+  transition: color 0.15s;
 }
 .sb-projects__count {
   min-width: 16px;
@@ -693,7 +703,7 @@ html.no-vibrancy .app {
   border-radius: 7px;
   font-size: 9px;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--sb-hover);
 }
 .sb-projects__save {
   -webkit-app-region: no-drag;
@@ -740,45 +750,84 @@ html.no-vibrancy .app {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
-  padding: 0 7px;
+  min-height: 38px;
+  padding: 4px 7px;
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 12px;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .sb-project:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--sb-hover);
+  border-color: var(--chrome-line);
 }
 .sb-project__icon {
   flex: 0 0 auto;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   font-size: 14px;
   color: var(--accent);
-  opacity: 0.7;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.sb-project:hover .sb-project__icon {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.sb-project__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .sb-project__name {
-  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text);
+  font-weight: var(--ui-weight, 400);
 }
-.sb-project__meta {
-  flex: 0 0 auto;
-  font-size: 9px;
+.sb-project__sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 10px;
   color: var(--text-dim);
-  opacity: 0.6;
-  transition: opacity 0.12s;
+  opacity: 0.7;
 }
-.sb-project:hover .sb-project__meta {
-  opacity: 0;
+.sb-project__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-dim));
+}
+.sb-project__meta-item {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.sb-project__meta-item .icon {
+  font-size: 11px;
+  opacity: 0.8;
 }
 .sb-project__del {
   position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   right: 7px;
   display: inline-flex;
   align-items: center;
@@ -795,7 +844,7 @@ html.no-vibrancy .app {
 }
 .sb-project__del:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--sb-press);
 }
 
 .sidebar__list {
@@ -836,7 +885,7 @@ html.no-vibrancy .app {
 }
 .sb-tab:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--sb-hover);
 }
 .sb-tab--active {
   color: #fff;
@@ -848,6 +897,19 @@ html.no-vibrancy .app {
   border-color: color-mix(in srgb, var(--accent) 42%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent),
     0 6px 20px -10px var(--glow);
+}
+/* crisp left accent indicator — the modern "you are here" marker */
+.sb-tab--active::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
 }
 .sb-tab--nested {
   margin-left: 14px;
@@ -875,6 +937,7 @@ html.no-vibrancy .app {
   flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: var(--ui-weight, 400);
 }
 .sb-tab__index {
   flex: 0 0 auto;
@@ -904,7 +967,7 @@ html.no-vibrancy .app {
 }
 .sb-tab__close:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--sb-press);
 }
 
 /* ---- a tab group ---- */
@@ -1919,6 +1982,8 @@ html.no-vibrancy .app {
       transparent 60%
     ),
     linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 80%, #000) 100%);
+  --sb-hover: rgba(15, 23, 42, 0.05);
+  --sb-press: rgba(15, 23, 42, 0.11);
 }
 .app[data-appearance="light"] .aurora__blob {
   opacity: 0.22;
@@ -1940,14 +2005,8 @@ html.no-vibrancy .app {
 .app[data-appearance="light"] .tab__close:hover {
   background: rgba(0, 0, 0, 0.08);
 }
-.app[data-appearance="light"] .sb-tab:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
 .app[data-appearance="light"] .sb-tab--active {
   color: var(--text);
-}
-.app[data-appearance="light"] .sb-tab__close:hover {
-  background: rgba(0, 0, 0, 0.1);
 }
 .app[data-appearance="light"] .sb-menu {
   background: rgba(248, 249, 252, 0.96);
