@@ -19,6 +19,9 @@ export interface Prefs {
 }
 
 const KEY = "aether.prefs.v1";
+/** Bumped when the *default* typography changes and we want existing installs
+ *  to adopt it once (here: SF Mono + tighter line-height for crisper text). */
+const TYPE_MIGRATION_KEY = "aether.type.migrated.v2";
 
 export const DEFAULT_OLLAMA: OllamaPrefs = {
   enabled: false,
@@ -58,10 +61,21 @@ export function loadPrefs(): Prefs {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULT_PREFS;
     const saved = JSON.parse(raw) as Partial<Prefs>;
+    // One-time typography refresh: existing users adopt the new crisp defaults
+    // (SF Mono + tighter leading) exactly once, then their own tweaks stick.
+    let migrateType = false;
+    try {
+      if (!localStorage.getItem(TYPE_MIGRATION_KEY)) {
+        migrateType = true;
+        localStorage.setItem(TYPE_MIGRATION_KEY, "1");
+      }
+    } catch {
+      /* storage unavailable — just fall through to merging saved prefs */
+    }
     return {
       themeId: themeById(saved.themeId ?? DEFAULT_PREFS.themeId).id,
       accentId: accentById(saved.accentId)?.id ?? DEFAULT_PREFS.accentId,
-      type: { ...DEFAULT_TYPE, ...(saved.type ?? {}) },
+      type: migrateType ? DEFAULT_TYPE : { ...DEFAULT_TYPE, ...(saved.type ?? {}) },
       ollama: validateOllama(saved.ollama),
     };
   } catch {

@@ -47,10 +47,14 @@ export const TYPE_LIMITS = {
 } as const;
 
 export const DEFAULT_TYPE: TypeSettings = {
-  fontFamily: "plex",
+  // SF Mono = the native macOS terminal/Xcode face; ui-monospace resolves to it
+  // even when the literal "SF Mono" family isn't directly addressable.
+  fontFamily: "sfmono",
   fontSize: 13,
   fontWeight: 400,
-  lineHeight: 1.4,
+  // tighter leading reads crisper and denser — terminal-standard, not the loose
+  // 1.4 used for prose.
+  lineHeight: 1.25,
   letterSpacing: 0,
   cursorStyle: "block",
   cursorBlink: true,

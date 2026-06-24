@@ -118,7 +118,7 @@ html.no-vibrancy .app {
   height: 52vw;
   border-radius: 50%;
   filter: blur(96px);
-  opacity: 0.2;
+  opacity: 0.12;
   mix-blend-mode: screen;
   /* slow, near-static drift — quiet ambient depth, not a lava lamp */
   animation: drift 64s ease-in-out infinite alternate;
@@ -136,7 +136,7 @@ html.no-vibrancy .app {
   background: radial-gradient(circle, var(--accent-2), transparent 68%);
   animation-duration: 78s;
   animation-delay: -18s;
-  opacity: 0.18;
+  opacity: 0.1;
 }
 .aurora__blob--3 {
   top: 34%;
@@ -150,7 +150,7 @@ html.no-vibrancy .app {
   );
   animation-duration: 90s;
   animation-delay: -30s;
-  opacity: 0.14;
+  opacity: 0.08;
 }
 
 @keyframes drift {
@@ -179,7 +179,7 @@ html.no-vibrancy .app {
     );
   background-size: 44px 44px;
   mask-image: radial-gradient(110% 80% at 50% 0%, #000 30%, transparent 75%);
-  opacity: 0.22;
+  opacity: 0.1;
 }
 
 /* ----------------------------------------------------------- */
@@ -194,8 +194,8 @@ html.no-vibrancy .app {
   padding: 0 10px 0 0;
   gap: 8px;
   background: var(--chrome);
-  backdrop-filter: blur(22px) saturate(120%);
-  -webkit-backdrop-filter: blur(22px) saturate(120%);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
   border-bottom: 1px solid var(--chrome-line);
   /* crisp neon hairline under the chrome + one soft accent glow */
   box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 14%, transparent),
@@ -479,9 +479,9 @@ html.no-vibrancy .app {
   margin: 10px 0 10px 10px;
   border-radius: 12px;
   border: 1px solid var(--chrome-line);
-  background: color-mix(in srgb, var(--chrome) 70%, transparent);
-  backdrop-filter: blur(18px) saturate(120%);
-  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  background: color-mix(in srgb, var(--chrome) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(125%);
+  -webkit-backdrop-filter: blur(12px) saturate(125%);
   overflow: hidden;
 }
 
@@ -1297,7 +1297,9 @@ html.no-vibrancy .app {
   margin: 10px 10px 10px 8px;
   border-radius: 12px;
   border: 1px solid var(--chrome-line);
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  /* near-solid panel so terminal text sits on a clean, high-contrast backdrop
+     instead of fighting the aurora/grid behind it — the key crispness win */
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   box-shadow: 0 24px 60px -30px #000;
   overflow: hidden;
 }
@@ -1310,12 +1312,19 @@ html.no-vibrancy .app {
   position: absolute;
   inset: 0;
   opacity: 0;
+  /* visibility:hidden keeps the layer laid out (so fit() can still measure it)
+     but stops it compositing — without this the outgoing session's GPU canvas
+     crossfades over the incoming one and the overlapping text grids garble. */
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.12s ease;
 }
 .term-layer--active {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+  /* fade the incoming session IN only; the outgoing one is hidden instantly,
+     so there's never a frame where two terminals are painted at once. */
+  transition: opacity 0.12s ease;
 }
 
 /* ---- split panes ---- */
@@ -1448,8 +1457,8 @@ html.no-vibrancy .app {
   height: 28px;
   padding: 0 14px;
   background: var(--chrome);
-  backdrop-filter: blur(22px) saturate(120%);
-  -webkit-backdrop-filter: blur(22px) saturate(120%);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
   border-top: 1px solid var(--chrome-line);
   box-shadow: 0 -1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
   font-family: var(--font-mono);

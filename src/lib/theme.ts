@@ -56,12 +56,13 @@ const rgba = ([r, g, b]: [number, number, number], a: number) =>
  *  dark glass so chrome feels of-a-piece with the palette rather than neutral gray. */
 export function chromeSurface(t: AetherTheme): string {
   if (t.appearance === "light") {
-    return rgba(mix(t.bg, "#ffffff", 0.55), 0.66);
+    return rgba(mix(t.bg, "#ffffff", 0.55), 0.78);
   }
   // dark: lift the base bg slightly, then nudge toward the accent for a cohesive tint
   const lifted = rgbToHex(mix(t.bg, "#ffffff", 0.08));
   const tinted = mix(lifted, t.accent, 0.06);
-  return rgba(tinted, 0.5);
+  // firmer alpha → crisper chrome edges and labels (less see-through haze)
+  return rgba(tinted, 0.66);
 }
 
 /** The hairline border color for chrome edges — crisp, low-contrast. */

@@ -244,12 +244,21 @@ export default function Terminal({
   useEffect(() => {
     if (!active) return;
     const t = setTimeout(() => {
+      const term = termRef.current;
       try {
         fitRef.current?.fit();
       } catch {
         /* ignore */
       }
-      termRef.current?.focus();
+      // The WebGL renderer only draws on data/resize events, so a session that
+      // was hidden can surface a stale/garbled GPU frame on switch. Force a full
+      // viewport repaint so the newly-visible terminal always paints cleanly.
+      try {
+        if (term) term.refresh(0, term.rows - 1);
+      } catch {
+        /* DOM renderer repaints on its own */
+      }
+      term?.focus();
     }, 30);
     return () => clearTimeout(t);
   }, [active]);
